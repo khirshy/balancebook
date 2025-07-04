@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>دفتر التوازن</title>
+  <style>
+    body {
+      font-family: Arial;
+      text-align: center;
+      background-color: #f0f0f0;
+      direction: rtl;
+    }
+    .container {
+      max-width: 600px;
+      margin: auto;
+      padding: 20px;
+      background: white;
+      border-radius: 10px;
+    }
+    input, textarea, button, select {
+      margin: 10px 0;
+      width: 100%;
+      padding: 10px;
+      font-size: 1em;
+    }
+    #task-list {
+      list-style-type: none;
+      padding: 0;
+    }
+    #task-list li {
+      background: #ddd;
+      padding: 10px;
+      margin: 5px 0;
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+    .transaction-log {
+      text-align: right;
+      background-color: #eef;
+      padding: 10px;
+      margin-top: 20px;
+      border-radius: 5px;
+    }
+    .transaction-log h3 {
+      margin: 0 0 10px 0;
+    }
+    pre {
+      background-color: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>💵دفتر التوازن💵</h1>
+    <input type="text" id="taskInput" placeholder="أدخل اسم الشخص" />
+    <button onclick="addTask()">إضافة شخص</button>
+    <ul id="task-list"></ul>
+    <button onclick="loadData()">تحميل</button>
+    <div class="transaction-log">
+      <h3>سجل المعاملات</h3>
+      <pre id="transactionDisplay">اختر شخصاً لعرض مشترياته.</pre>
+    </div>
+  </div>
+
+  <script>
+    let tasks = [];
+
+    function addTask() {
+      const input = document.getElementById('taskInput');
+      const taskName = input.value.trim();
+      if (taskName === '') {
+        alert("يجب إدخال اسم.");
+        return;
+      }
+      if (tasks.includes(taskName)) {
+        alert("هذا الشخص موجود بالفعل.");
+        return;
+      }
+      tasks.push(taskName);
+      saveFile(taskName);
+      localStorage.setItem(`balance_${taskName}`, '0');
+      saveData();
+      renderTasks();
+      input.value = '';
+    }
+
+    function renderTasks() {
+      const list = document.getElementById('task-list');
+      list.innerHTML = '';
+      tasks.forEach((task, index) => {
+        const balance = localStorage.getItem(`balance_${task}`) || '0';
+        const li = document.createElement('li');
+        li.innerHTML = `
+          ${task} (الرصيد: £${parseFloat(balance).toFixed(2)})
+          <div>
+            <button onclick="editTask('${task}')">شراء</button>
+            <button onclick="addMoney('${task}')">إضافة أموال</button>
+            <button onclick="viewTask('${task}')">عرض</button>
+            <button onclick="deleteTask(${index})">حذف</button>
+          </div>`;
+        list.appendChild(li);
+      });
+    }
+
+    function deleteTask(index) {
+      const taskName = tasks[index];
+      tasks.splice(index, 1);
+      deleteFile(taskName);
+      localStorage.removeItem(`balance_${taskName}`);
+      saveData();
+      renderTasks();
+      document.getElementById('transactionDisplay').textContent = 'اختر شخصاً لعرض مشترياته.';
+    }
+
+    function saveData() {
+      localStorage.setItem('tasks', JSON.stringify(tasks));
+    }
+
+    function loadData() {
+      const saved = localStorage.getItem('tasks');
+      if (saved) {
+        tasks = JSON.parse(saved);
+        renderTasks();
+      } else {
+        alert("لم يتم العثور على بيانات محفوظة.");
+      }
+    }
+
+    function editTask(taskName) {
+      const content = prompt("أدخل عملية الشراء (الصيغة: العنصر - المبلغ):");
+      if (content) {
+        const parts = content.split(" - ");
+        if (parts.length === 2) {
+          const item = parts[0];
+          const amount = parseFloat(parts[1]);
+          if (!isNaN(amount)) {
+            const fileKey = `file_${taskName}`;
+            const prevData = localStorage.getItem(fileKey) || "";
+            const newData = prevData + `\n${new Date().toLocaleDateString()} - ${item}: -£${amount.toFixed(2)}`;
+            localStorage.setItem(fileKey, newData);
+
+            let currentBalance = parseFloat(localStorage.getItem(`balance_${taskName}`)) || 0;
+            currentBalance -= amount;
+            localStorage.setItem(`balance_${taskName}`, currentBalance.toString());
+
+            saveData();
+            alert("تم حفظ الشراء بنجاح.");
+            viewTask(taskName);
+            renderTasks();
+          } else {
+            alert("تم إدخال مبلغ غير صالح.");
+          }
+        } else {
+          alert("يرجى استخدام الصيغة: العنصر - المبلغ");
+        }
+      }
+    }
+
+    function addMoney(taskName) {
+      const input = prompt("أدخل المبلغ لإضافته إلى الرصيد:");
+      const amount = parseFloat(input);
+      if (!isNaN(amount)) {
+        let currentBalance = parseFloat(localStorage.getItem(`balance_${taskName}`)) || 0;
+        currentBalance += amount;
+        localStorage.setItem(`balance_${taskName}`, currentBalance.toString());
+
+        const fileKey = `file_${taskName}`;
+        const prevData = localStorage.getItem(fileKey) || "";
+        const newData = prevData + `\n${new Date().toLocaleDateString()} - تم إضافة أموال: +£${amount.toFixed(2)}`;
+        localStorage.setItem(fileKey, newData);
+
+        alert("تمت إضافة الأموال بنجاح.");
+        renderTasks();
+        viewTask(taskName);
+      } else {
+        alert("المبلغ غير صالح.");
+      }
+    }
+
+    function viewTask(taskName) {
+      const fileKey = `file_${taskName}`;
+      const data = localStorage.getItem(fileKey) || "لا توجد سجلات.";
+      document.getElementById('transactionDisplay').textContent = data.trim();
+    }
+
+    function saveFile(taskName) {
+      const fileKey = `file_${taskName}`;
+      if (!localStorage.getItem(fileKey)) {
+        localStorage.setItem(fileKey, "");
+      }
+    }
+
+    function deleteFile(taskName) {
+      const fileKey = `file_${taskName}`;
+      localStorage.removeItem(fileKey);
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
